@@ -101,7 +101,7 @@ int main (int argc, char **argv)
     printf("time: %fms\n", time);
     
     cudaFree(Id);
-	/* Program Finished */
+    /* Program Finished */
     return 0;
 }
 
