@@ -17,20 +17,25 @@ typedef struct complextype
 __global__
 void work(int *id, int tb_x, int tb_y, int gr_x, int gr_y)
 {
-    int i, j, k;
+    int i, j, k, idx;
     Complex z, c;
     float lengthsq, temp;
     const int num_threads = tb_x * tb_y;
     int work_width = X_RESN / num_threads;
     const int bid = blockIdx.x + (blockIdx.y * gr_x);
     const int tid = threadIdx.x + (threadIdx.y * tb_x) + (bid * num_threads);
-    id[tid] = tid;
+    int start = tid * work_width;
+    int stop = start + work_width;
+    if (stop > 800)
+        stop = 800;
     // if X_RESN is not evenly divisible by num_threads
     // give remainder of work to last thread
     if (tid == num_threads - 1)
-        work_width = X_RESN - tid;
-    
-    /*for(i = tid; i < tid + work_width; i++) {
+        stop = X_RESN;
+   
+    id[0] = 0;
+
+    for(i = start; i < stop; i++) {
         for(j = 0; j < Y_RESN; j++) {
 
             z.real = z.imag = 0.0;
@@ -46,12 +51,13 @@ void work(int *id, int tb_x, int tb_y, int gr_x, int gr_y)
                 k++;
             } while (lengthsq < 4.0 && k < 100);
             
+            idx = i + (j * Y_RESN);    
             if (k == 100) 
-                id[i + (j * Y_RESN)] = 1;
+                id[idx] = 1;
             else
-                id[i + (j * Y_RESN)] = 0;
+                id[idx] = 0;
         }
-    }*/   
+    }   
 }
 
 int main (int argc, char **argv)
@@ -70,9 +76,16 @@ int main (int argc, char **argv)
         printf("usage: %s THREAD_BLOCK_WIDTH THREAD_BLOCK_HEIGHT GRID_WIDTH GRID_HEIGHT\n", argv[0]);
         return -1;
     }
+    float time;
+    cudaEvent_t start, stop;
     int id[X_RESN * Y_RESN];
     int *Id;
-    cudaMalloc((void**)&Id, X_RESN * Y_RESN); 
+
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start, 0);
+
+    cudaMalloc((void**)&Id, X_RESN * Y_RESN * sizeof(int)); 
 
     dim3 dimBlock(tb_x, tb_y);
     dim3 dimGrid(gr_x, gr_y);
@@ -80,9 +93,13 @@ int main (int argc, char **argv)
     work<<<dimGrid, dimBlock>>>(Id, tb_x, tb_y, gr_x, gr_y);
     
     cudaMemcpy(id, Id, X_RESN * Y_RESN, cudaMemcpyDeviceToHost);
-    int i;
-    for (i = 0; i < 30; ++i)
-        printf("id: %d\n", id[i]);
+    
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+   
+    printf("time: %fms\n", time);
+    
     cudaFree(Id);
 	/* Program Finished */
     return 0;
